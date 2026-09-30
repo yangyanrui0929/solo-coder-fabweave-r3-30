@@ -228,6 +228,15 @@ def test_lot_merge_preserves_quantity_and_rejects_held_input():
         merge_lots("REQ-2", [lots[0], Lot("LOT-C", "P", "R", "S", 1, 2, frozenset({"QA"}))])
 
 
+def test_lot_merge_rejects_duplicate_source_lots():
+    lot = Lot("LOT-A", "P", "R", "S", 1, 10)
+    other = Lot("LOT-B", "P", "R", "S", 1, 15)
+    with pytest.raises(ValueError, match="duplicate source lots: LOT-A"):
+        merge_lots("REQ-1", [lot, other, lot])
+    with pytest.raises(ValueError, match="duplicate source lots: LOT-A"):
+        merge_lots("REQ-2", [lot, Lot("LOT-A", "P", "R", "S", 1, 99)])
+
+
 def test_dedication_uses_effective_revision_and_deny_overrides_allow():
     policies = [
         DedicationPolicy(1, 0, {"P": frozenset({"T1", "T2"})}),
@@ -333,6 +342,16 @@ def test_rework_release_requires_both_authorization_and_hold_completion():
 def test_merge_and_commit_preserves_quantity_across_services():
     lots = [Lot("A", "P", "R", "S", 1, 4), Lot("B", "P", "R", "S", 1, 6)]
     merged, allocation = merge_and_commit("REQ", lots, CommitLedger(20), "ORDER")
+    assert merged.quantity == allocation.units == 10
+
+
+def test_merge_and_commit_rejects_duplicate_sources_without_committing():
+    ledger = CommitLedger(20)
+    lots = [Lot("A", "P", "R", "S", 1, 4), Lot("A", "P", "R", "S", 1, 4)]
+    with pytest.raises(ValueError, match="duplicate source lots: A"):
+        merge_and_commit("REQ", lots, ledger, "ORDER")
+    assert ledger.available == 20
+    merged, allocation = merge_and_commit("REQ", [lots[0], Lot("B", "P", "R", "S", 1, 6)], ledger, "ORDER")
     assert merged.quantity == allocation.units == 10
 
 

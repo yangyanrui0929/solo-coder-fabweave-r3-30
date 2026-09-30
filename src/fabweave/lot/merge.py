@@ -25,6 +25,14 @@ class Lot:
 def merge_lots(request_id: str, lots: list[Lot]) -> Lot:
     if len(lots) < 2:
         raise ValueError("at least two lots are required")
+    seen: set[str] = set()
+    duplicated: set[str] = set()
+    for lot in lots:
+        if lot.lot_id in seen:
+            duplicated.add(lot.lot_id)
+        seen.add(lot.lot_id)
+    if duplicated:
+        raise ValueError(f"duplicate source lots: {', '.join(sorted(duplicated))}")
     first = lots[0]
     identity = (first.product, first.route, first.step, first.recipe_revision)
     if any((lot.product, lot.route, lot.step, lot.recipe_revision) != identity for lot in lots):

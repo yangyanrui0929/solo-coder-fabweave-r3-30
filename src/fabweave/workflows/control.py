@@ -227,8 +227,7 @@ def rework_release_decision(
 
 
 def merge_and_commit(request_id: str, lots: list[Lot], ledger: CommitLedger, order_id: str) -> tuple[Lot, Allocation]:
-    unique_lots = list({lot.lot_id: lot for lot in lots}.values())
-    merged = merge_lots(request_id, unique_lots)
+    merged = merge_lots(request_id, lots)
     allocation = ledger.allocate(request_id, order_id, merged.quantity)
     return merged, allocation
 
