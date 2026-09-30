@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from fabweave.core.ids import deterministic_id
@@ -22,9 +24,17 @@ class Lot:
     active_holds: frozenset[str] = frozenset()
 
 
+def duplicate_lot_ids(lots: Iterable[Lot]) -> tuple[str, ...]:
+    counts = Counter(lot.lot_id for lot in lots)
+    return tuple(sorted(lot_id for lot_id, count in counts.items() if count > 1))
+
+
 def merge_lots(request_id: str, lots: list[Lot]) -> Lot:
     if len(lots) < 2:
         raise ValueError("at least two lots are required")
+    duplicates = duplicate_lot_ids(lots)
+    if duplicates:
+        raise ValueError(f"duplicate source lot in merge request: {', '.join(duplicates)}")
     first = lots[0]
     identity = (first.product, first.route, first.step, first.recipe_revision)
     if any((lot.product, lot.route, lot.step, lot.recipe_revision) != identity for lot in lots):

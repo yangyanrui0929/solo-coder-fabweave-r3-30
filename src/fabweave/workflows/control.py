@@ -227,8 +227,10 @@ def rework_release_decision(
 
 
 def merge_and_commit(request_id: str, lots: list[Lot], ledger: CommitLedger, order_id: str) -> tuple[Lot, Allocation]:
-    unique_lots = list({lot.lot_id: lot for lot in lots}.values())
-    merged = merge_lots(request_id, unique_lots)
+    # merge_lots rejects duplicate source lots (and every other invalid input)
+    # before a merged lot exists, so the ledger is only touched once the merge
+    # is sound and cannot be left with a partial commitment.
+    merged = merge_lots(request_id, lots)
     allocation = ledger.allocate(request_id, order_id, merged.quantity)
     return merged, allocation
 

@@ -18,7 +18,7 @@ from fabweave.dispatch.priority import DispatchCandidate, rank_candidates
 from fabweave.energy.demand import coincident_peak, demand_violations
 from fabweave.genealogy.carrier import GenealogyGraph
 from fabweave.holds.release import HoldState, release_decision
-from fabweave.lot.merge import Lot, merge_lots
+from fabweave.lot.merge import Lot, duplicate_lot_ids, merge_lots
 from fabweave.maintenance.window import MaintenancePolicy, assignment_decision
 from fabweave.metrology.sampling import Wafer, deterministic_sample
 from fabweave.queue_time.enforcer import QueueLimit, queue_time_decision
@@ -228,6 +228,17 @@ def test_lot_merge_preserves_quantity_and_rejects_held_input():
         merge_lots("REQ-2", [lots[0], Lot("LOT-C", "P", "R", "S", 1, 2, frozenset({"QA"}))])
 
 
+def test_lot_merge_rejects_repeated_source_lot_without_deduping():
+    lot_a = Lot("LOT-A", "P", "R", "S", 1, 10)
+    lot_b = Lot("LOT-B", "P", "R", "S", 1, 15)
+    assert duplicate_lot_ids([lot_a, lot_b, lot_a]) == ("LOT-A",)
+    with pytest.raises(ValueError, match="duplicate source lot"):
+        merge_lots("REQ-3", [lot_a, lot_b, lot_a])
+    # A mismatched repeat must not be silently collapsed either.
+    with pytest.raises(ValueError, match="duplicate source lot"):
+        merge_lots("REQ-4", [lot_a, Lot("LOT-A", "P", "R", "S", 1, 100), lot_b])
+
+
 def test_dedication_uses_effective_revision_and_deny_overrides_allow():
     policies = [
         DedicationPolicy(1, 0, {"P": frozenset({"T1", "T2"})}),
@@ -334,6 +345,20 @@ def test_merge_and_commit_preserves_quantity_across_services():
     lots = [Lot("A", "P", "R", "S", 1, 4), Lot("B", "P", "R", "S", 1, 6)]
     merged, allocation = merge_and_commit("REQ", lots, CommitLedger(20), "ORDER")
     assert merged.quantity == allocation.units == 10
+
+
+def test_merge_and_commit_rejects_duplicate_source_lot_without_partial_commitment():
+    lots = [
+        Lot("A", "P", "R", "S", 1, 4),
+        Lot("A", "P", "R", "S", 1, 4),
+        Lot("B", "P", "R", "S", 1, 6),
+    ]
+    ledger = CommitLedger(20)
+    with pytest.raises(ValueError, match="duplicate source lot"):
+        merge_and_commit("REQ", lots, ledger, "ORDER")
+    # No merged lot is produced and the ledger keeps its full availability:
+    # the invalid input must be rejected before any allocation happens.
+    assert ledger.available == 20
 
 
 def test_dedicated_qualification_combines_both_policy_gates():
